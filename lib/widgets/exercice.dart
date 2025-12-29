@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 
+
+class Exercice { 
+  String? name ; 
+  String? imagePath ; 
+  int? units ; 
+
+  Exercice(this.name , this.imagePath , this.units ) ; 
+}
 class ExerciceWidget extends StatelessWidget { 
-
-
+  final Exercice exercice ; 
+  ExerciceWidget({super.key , required this.exercice});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -25,14 +33,14 @@ class ExerciceWidget extends StatelessWidget {
       child:Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Image.asset("assets/squats.png" , width: 100, height: 100,) , 
+          Image.asset(this.exercice.imagePath! , width: 100, height: 100,) , 
           Padding(
             padding: EdgeInsets.all(10) , 
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Text("Squats" , style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 20 , fontWeight: FontWeight.bold),) , 
-                Text("6 units" , style: TextStyle(color: Colors.grey[500] , fontFamily: "Open Sans" , fontSize: 16 , fontWeight: FontWeight.normal),) 
+                Text(this.exercice.name! , style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 20 , fontWeight: FontWeight.bold),) , 
+                Text("${this.exercice.units!} units" , style: TextStyle(color: Colors.grey[500] , fontFamily: "Open Sans" , fontSize: 16 , fontWeight: FontWeight.normal),) 
               ],
             )
           )

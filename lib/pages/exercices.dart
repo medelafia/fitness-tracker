@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math';
-
 import 'package:fitness_tracker/widgets/exercice.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +9,10 @@ import 'package:sensors_plus/sensors_plus.dart';
 enum SquatState { 
   standing , goingDown , goingUp , bottom 
 }
+enum LungeState { 
+  center , goingRight , goingLeft , left , right
+}
+
 class ExercicesPage extends StatefulWidget {
   @override
   State<ExercicesPage> createState() => _ExercicesPageState(); 
@@ -24,9 +26,9 @@ class _ExercicesPageState extends State<ExercicesPage> {
   int exerciceNumber = 1 ; 
   ValueNotifier<bool> isStop = ValueNotifier(false) ; 
   bool startPage = true ; 
-  List<String> exercices = [ "1" , "2" , "3" , "4" ] ; 
+  List<Exercice> exercices = [ Exercice("Squat", "assets/squats.png", 20 ) , Exercice("Lunge Side", "assets/squats.png", 30 )  ] ; 
   int stopTimer = 0 ; 
-
+  bool done = false ; 
 
 
   void startTiming() { 
@@ -57,38 +59,50 @@ class _ExercicesPageState extends State<ExercicesPage> {
       }
     }) ; 
     SquatState squatState = SquatState.standing ; 
-    accelerometerEventStream().listen((event) {
+    bool wentLeft = false;
+    bool wentRight = false;
+    userAccelerometerEventStream().listen((event) {
       
-      if(exerciceNumber == 1  && !startPage && !isStop.value) {
-          double magnitude = sqrt(
-            event.x * event.x +
-            event.y * event.y +
-            event.z * event.z
-          );
-
-
-        if(squatState == SquatState.standing && magnitude > 12 ) { 
+      if(exerciceNumber == 1 && !startPage && !isStop.value) {
+        double verticale = event.y ; 
+        
+        if(squatState == SquatState.standing && verticale < -1.2 ) { 
           squatState = SquatState.goingDown ; 
         }
-
-        if(squatState == SquatState.goingDown && magnitude < 10 ){
+        if(squatState == SquatState.goingDown && verticale.abs() < 0.3 ){
           squatState = SquatState.bottom ; 
         }
-
-        if(squatState == SquatState.bottom && magnitude < 12 ) { 
+        if(squatState == SquatState.bottom && verticale > 1.2 ) { 
           squatState = SquatState.goingUp ; 
         }
-
-        if(squatState == SquatState.goingUp  ) {
+        if(squatState == SquatState.goingUp && verticale.abs() < 0.3 ) {
           setState(() {
             count++;
           });
           squatState = SquatState.standing ; 
-          if(count > 15) { 
+          if(count > this.exercices[0].units!) { 
             setState(() {
               exerciceNumber++ ; 
               isStop.value = true ; 
+              count = 0 ; 
             });
+          }
+        }
+      }else if(exerciceNumber == 2 && !startPage && !isStop.value) { 
+        double x = event.x;
+
+        if (x < -0.4) wentLeft = true;
+        if (x > 0.4) wentRight = true;
+
+        if (wentLeft && wentRight && x.abs() < 0.15) {
+          setState(() => count++);
+
+          wentLeft = false;
+          wentRight = false; 
+
+          if(count > this.exercices[1].units!) { 
+            done = true ; 
+            count = 0 ; 
           }
         }
       }
@@ -111,7 +125,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
                   margin: EdgeInsets.only(bottom: 20),
                   child : Text("Workouts" , style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold)  ) , 
                 ), 
-                ...exercices.map((element) => ExerciceWidget()) , 
+                ...exercices.map((element) => ExerciceWidget(exercice: element,)) , 
                 Container(
                   margin: EdgeInsets.only(top: 20),
                   child: 
@@ -148,7 +162,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
             child: Column(
               children: [
                 Text(
-                  "Stop" , 
+                  "Break" , 
                   style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold)
                 ) ,  
                 Text(
@@ -156,7 +170,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
                   style: TextStyle(color: Colors.grey[500] , fontFamily: "Open Sans" , fontSize: 16 , fontWeight: FontWeight.normal ) , 
                   textAlign: TextAlign.center,
                 ) , 
-                Image.asset("assets/squats.png") , 
+                Image.asset("assets/break.png") , 
                 Container( 
                   margin: EdgeInsets.only(top: 30 ),
                   padding: EdgeInsets.all(10), 
@@ -175,6 +189,26 @@ class _ExercicesPageState extends State<ExercicesPage> {
         ) 
       )  ; 
     }
+    if(done) { 
+      return Scaffold(
+      backgroundColor: Colors.white ,
+      body: 
+      Padding(
+        padding: EdgeInsets.fromLTRB(0, 100, 0, 100) ,
+        child : Center(
+            child: Column(
+              children: [
+                Text( 
+                    "Good Work" , 
+                    style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold),
+                )
+              ]
+            ) 
+            )
+          )
+        ); 
+                
+    }
     return Scaffold(
       backgroundColor: Colors.white ,
       body: 
@@ -189,20 +223,19 @@ class _ExercicesPageState extends State<ExercicesPage> {
                 ) , 
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 30, 10, 30) , 
-                child: Image.asset("assets/squats.png"),
+                child: Image.asset(this.exercices[this.exerciceNumber - 1].imagePath!),
                 ) , 
-              if(exerciceNumber == 1) 
-                Container( 
+              Container( 
                   padding: EdgeInsets.all(10), 
                   decoration: BoxDecoration(
                     color: Colors.grey[100] , 
                     borderRadius: BorderRadius.circular(20)   
                   ),
                   alignment: Alignment.center,
-                  child: Text("${count}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
-                  width: 80 , 
+                  child: Text("${count} / ${this.exercices[this.exerciceNumber - 1].units}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
+                  width: 200 , 
                   height: 80 
-                  ) 
+              ) 
             ],
           ),
         )
