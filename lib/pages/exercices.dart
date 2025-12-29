@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:fitness_tracker/widgets/congrat.dart';
 import 'package:fitness_tracker/widgets/exercice.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,11 @@ class _ExercicesPageState extends State<ExercicesPage> {
   int exerciceNumber = 1 ; 
   ValueNotifier<bool> isStop = ValueNotifier(false) ; 
   bool startPage = true ; 
-  List<Exercice> exercices = [ Exercice("Squat", "assets/squats.png", 20 ) , Exercice("Lunge Side", "assets/squats.png", 30 )  ] ; 
+  List<Exercice> exercices = [ 
+    Exercice("Squat", "assets/squats.png", 3 ) , 
+    Exercice("Lunge Side", "assets/side_lunge.png", 3 )  ,
+    Exercice("Split Squats", "assets/splitSquats.png", 3 ) 
+    ] ; 
   int stopTimer = 0 ; 
   bool done = false ; 
 
@@ -39,7 +44,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
       (Timer timer) {
         setState(() {
           stopTimer++ ; 
-          if(stopTimer >= 30) { 
+          if(stopTimer >= 5) { 
             isStop.value = false ; 
             stopTimer = 0 ; 
             timer.cancel(); 
@@ -63,7 +68,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
     bool wentRight = false;
     userAccelerometerEventStream().listen((event) {
       
-      if(exerciceNumber == 1 && !startPage && !isStop.value) {
+      if( (exerciceNumber == 1 || exerciceNumber == 3) && !startPage && !isStop.value) {
         double verticale = event.y ; 
         
         if(squatState == SquatState.standing && verticale < -1.2 ) { 
@@ -82,9 +87,15 @@ class _ExercicesPageState extends State<ExercicesPage> {
           squatState = SquatState.standing ; 
           if(count > this.exercices[0].units!) { 
             setState(() {
-              exerciceNumber++ ; 
-              isStop.value = true ; 
-              count = 0 ; 
+              if(this.exerciceNumber == 1) {
+                exerciceNumber++ ; 
+                isStop.value = true ; 
+                count = 0 ; 
+              }else { 
+                done = true ; 
+                count = 0 ; 
+              }
+
             });
           }
         }
@@ -101,8 +112,9 @@ class _ExercicesPageState extends State<ExercicesPage> {
           wentRight = false; 
 
           if(count > this.exercices[1].units!) { 
-            done = true ; 
-            count = 0 ; 
+              exerciceNumber++ ; 
+              isStop.value = true ; 
+              count = 0 ; 
           }
         }
       }
@@ -127,14 +139,20 @@ class _ExercicesPageState extends State<ExercicesPage> {
                 ), 
                 ...exercices.map((element) => ExerciceWidget(exercice: element,)) , 
                 Container(
-                  margin: EdgeInsets.only(top: 20),
+                  margin: EdgeInsets.only(top: 30),
+                  alignment: Alignment.bottomRight,
                   child: 
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom( 
                       backgroundColor: Colors.orange , 
                       side: BorderSide.none , 
                       foregroundColor: Colors.white , 
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)) , side: BorderSide.none) ,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(10.0)) ,
+                        side: BorderSide.none
+                      ) ,
+                      iconSize: 24 , 
+                      padding: EdgeInsets.fromLTRB(30, 10, 30, 10) 
                     ),
                     onPressed: () {
                       setState(() {
@@ -179,10 +197,11 @@ class _ExercicesPageState extends State<ExercicesPage> {
                     borderRadius: BorderRadius.circular(20)   
                   ),
                   alignment: Alignment.center,
-                  child: Text("${stopTimer}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
+                  child: 
+                    Text("${stopTimer}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
                   width: 80 , 
                   height: 80 
-                  ) 
+                ) 
               ]
             ) 
           )     
@@ -190,51 +209,50 @@ class _ExercicesPageState extends State<ExercicesPage> {
       )  ; 
     }
     if(done) { 
-      return Scaffold(
-      backgroundColor: Colors.white ,
-      body: 
-      Padding(
-        padding: EdgeInsets.fromLTRB(0, 100, 0, 100) ,
-        child : Center(
-            child: Column(
-              children: [
-                Text( 
-                    "Good Work" , 
-                    style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold),
-                )
-              ]
-            ) 
-            )
-          )
-        ); 
-                
+      return Congrat() ;  
     }
     return Scaffold(
       backgroundColor: Colors.white ,
+      appBar:  
+          AppBar(
+            backgroundColor: Colors.grey[100] ,
+            title: Text("Workout"),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back) , 
+              onPressed: () {
+                setState(() {
+                  this.startPage = true ; 
+                });
+              },
+            ),
+            actions: [
+              
+            ],
+          ),
       body: 
       Padding(
-        padding: EdgeInsets.fromLTRB(0, 100, 0, 100) ,
+        padding: EdgeInsets.fromLTRB(0, 80, 0, 80) ,
         child : Center(
             child: Column(
             children: [
               Text( 
-                  "Exercice ${exerciceNumber}" , 
-                  style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold),
+                "Exercice ${exerciceNumber}" , 
+                style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold),
                 ) , 
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 30, 10, 30) , 
                 child: Image.asset(this.exercices[this.exerciceNumber - 1].imagePath!),
                 ) , 
               Container( 
-                  padding: EdgeInsets.all(10), 
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100] , 
-                    borderRadius: BorderRadius.circular(20)   
-                  ),
-                  alignment: Alignment.center,
-                  child: Text("${count} / ${this.exercices[this.exerciceNumber - 1].units}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
-                  width: 200 , 
-                  height: 80 
+                padding: EdgeInsets.all(10), 
+                decoration: BoxDecoration(
+                  color: Colors.grey[100] , 
+                  borderRadius: BorderRadius.circular(20)   
+                ),
+                alignment: Alignment.center ,
+                child: Text("${count} / ${this.exercices[this.exerciceNumber - 1].units}" , style: TextStyle(color: Colors.black , fontFamily: "Open Sans" , fontSize: 40 , fontWeight: FontWeight.bold ))  , 
+                width: 200 , 
+                height: 80 
               ) 
             ],
           ),

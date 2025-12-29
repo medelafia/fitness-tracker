@@ -38,6 +38,7 @@ class ExerciceWidget extends StatelessWidget {
             padding: EdgeInsets.all(10) , 
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(this.exercice.name! , style: TextStyle(color: Colors.grey[800] , fontFamily: "Open Sans" , fontSize: 20 , fontWeight: FontWeight.bold),) , 
                 Text("${this.exercice.units!} units" , style: TextStyle(color: Colors.grey[500] , fontFamily: "Open Sans" , fontSize: 16 , fontWeight: FontWeight.normal),) 
