@@ -28,9 +28,9 @@ class _ExercicesPageState extends State<ExercicesPage> {
   ValueNotifier<bool> isStop = ValueNotifier(false) ; 
   bool startPage = true ; 
   List<Exercice> exercices = [ 
-    Exercice("Squat", "assets/squats.png", 3 ) , 
-    Exercice("Lunge Side", "assets/side_lunge.png", 3 )  ,
-    Exercice("Split Squats", "assets/splitSquats.png", 3 ) 
+    Exercice("Squat", "assets/squats.png", 20 ) , 
+    Exercice("Lunge Side", "assets/side_lunge.png", 20 )  ,
+    Exercice("Split Squats", "assets/splitSquats.png", 20 ) 
     ] ; 
   int stopTimer = 0 ; 
   bool done = false ; 
@@ -44,7 +44,7 @@ class _ExercicesPageState extends State<ExercicesPage> {
       (Timer timer) {
         setState(() {
           stopTimer++ ; 
-          if(stopTimer >= 5) { 
+          if(stopTimer >= 20) { 
             isStop.value = false ; 
             stopTimer = 0 ; 
             timer.cancel(); 
