@@ -37,7 +37,7 @@ class HomePage extends StatelessWidget {
             // Button 1: The New Running Map
             _buildMenuButton(
                 context,
-                "Start Virtual Run",
+                "Start Run",
                 Icons.map,
                 Colors.blue,
                 // This line navigates to your new RunningMapPage

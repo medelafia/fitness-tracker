@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui';
+import 'dart:ui'; // For Path metrics
 import 'package:fitness_tracker/pages/exercices.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 class RunningMapPage extends StatefulWidget {
@@ -11,101 +12,160 @@ class RunningMapPage extends StatefulWidget {
 }
 
 class _RunningMapPageState extends State<RunningMapPage> with SingleTickerProviderStateMixin {
-  final int totalStepsNeeded = 50;
+  // --- Configuration ---
+  final double totalDistanceNeeded = 100.0; // The route is 100 meters long
 
-  // Game State
+  // --- Game State ---
+  double distanceCovered = 0.0; // In meters
   int stepsTaken = 0;
   int score = 0;
-  double progress = 0.0; // 0.0 to 1.0 (0% to 100%)
+  double progress = 0.0; // 0.0 to 1.0
   bool isFinished = false;
+  String statusMessage = "Start walking!";
 
   // Stars Logic (at 20%, 50%, 80% of the path)
   List<double> starLocations = [0.2, 0.5, 0.8];
   List<bool> starCollected = [false, false, false];
 
-  // Sensor
-  StreamSubscription? _streamSubscription;
-  bool _canStep = true; // Debounce to prevent double counting
+  // --- Sensors ---
+  StreamSubscription<Position>? _positionStream;
+  StreamSubscription<UserAccelerometerEvent>? _accelStream;
+  Position? _lastPosition;
+  bool _canStep = true; // For debounce
 
   @override
   void initState() {
     super.initState();
-    _startListening();
+    _initSensors();
   }
 
-  void _startListening() {
-    // We use UserAccelerometer (ignores gravity) for better shake detection
-    _streamSubscription = userAccelerometerEventStream().listen((event) {
-      if (isFinished) return;
+  Future<void> _initSensors() async {
+    // 1. Setup GPS
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => statusMessage = "GPS Disabled");
+      return;
+    }
 
-      // Simple Step Detection:
-      // If the phone moves sharply up/down or forward (Magnitude > 2.0)
-      double magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
 
-      if (magnitude > 2.0 && _canStep) {
-        _onStepTaken();
+    // Get initial position
+    _lastPosition = await Geolocator.getCurrentPosition();
 
-        // Prevent counting one shake as 10 steps
-        _canStep = false;
-        Future.delayed(Duration(milliseconds: 400), () {
-          if (mounted) _canStep = true;
-        });
-      }
+    // Start GPS Stream (Updates Distance)
+    final LocationSettings locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 2, // Update every 2 meters to reduce jitter
+    );
+
+    _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings)
+        .listen((Position position) {
+      _onLocationUpdate(position);
+    });
+
+    // 2. Start Accelerometer Stream (Updates Steps)
+    _accelStream = userAccelerometerEventStream().listen((event) {
+      _onAccelerometerEvent(event);
     });
   }
 
-  void _onStepTaken() {
+  // --- Logic: GPS drives Progress ---
+  void _onLocationUpdate(Position newPos) {
+    if (isFinished || _lastPosition == null) return;
+
+    // Calculate distance walked since last update
+    double dist = Geolocator.distanceBetween(
+        _lastPosition!.latitude, _lastPosition!.longitude,
+        newPos.latitude, newPos.longitude
+    );
+
     setState(() {
-      stepsTaken++;
-      progress = stepsTaken / totalStepsNeeded;
+      _lastPosition = newPos;
+      distanceCovered += dist;
 
-      if (progress >= 1.0) {
-        progress = 1.0;
-        isFinished = true;
-        _streamSubscription?.cancel();
-        _showWinDialog();
-      }
+      // Update Progress (0.0 to 1.0)
+      progress = distanceCovered / totalDistanceNeeded;
 
-      // Check Star Collisions
-      for (int i = 0; i < starLocations.length; i++) {
-        if (!starCollected[i] && progress >= starLocations[i]) {
-          starCollected[i] = true;
-          score += 10; // +10 points per star
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("⭐ Star Collected! +10 points"), duration: Duration(milliseconds: 500), backgroundColor: Colors.orange,)
-          );
-        }
-      }
+      _checkGameLogic();
     });
   }
 
-  // --- UPDATED DIALOG FUNCTION ---
+  // --- Logic: Accelerometer counts Steps ---
+  void _onAccelerometerEvent(UserAccelerometerEvent event) {
+    if (isFinished) return;
+
+    // Detect Shake (Step)
+    double magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+    if (magnitude > 2.0 && _canStep) {
+      setState(() {
+        stepsTaken++;
+      });
+      _canStep = false;
+      Future.delayed(Duration(milliseconds: 400), () {
+        if (mounted) _canStep = true;
+      });
+    }
+  }
+
+  // --- Logic: Game Rules ---
+  void _checkGameLogic() {
+    if (progress >= 1.0) {
+      progress = 1.0;
+      isFinished = true;
+      _positionStream?.cancel();
+      _accelStream?.cancel();
+      _showWinDialog();
+    }
+
+    // Check Star Collisions
+    for (int i = 0; i < starLocations.length; i++) {
+      if (!starCollected[i] && progress >= starLocations[i]) {
+        starCollected[i] = true;
+        score += 10;
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text("⭐ Star Collected!"),
+                duration: Duration(milliseconds: 500),
+                backgroundColor: Colors.orange
+            )
+        );
+      }
+    }
+  }
+
+  // --- Simulation for Testing at Desk ---
+  void _simulateMovement() {
+    setState(() {
+      distanceCovered += 5.0; // Fake walking 5 meters
+      progress = distanceCovered / totalDistanceNeeded;
+      stepsTaken += 7; // Fake taking 7 steps
+      _checkGameLogic();
+    });
+  }
+
   void _showWinDialog() {
     showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: Text("🎉 Route Complete!"),
-          content: Text("You finished the route in $stepsTaken steps.\nTotal Score: $score"),
+          content: Text("You walked ${distanceCovered.toStringAsFixed(1)}m.\nSteps: $stepsTaken\nScore: $score"),
           actions: [
-            // Option 1: Go Home
             TextButton(
                 onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Go back to Home Page
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
                 },
                 child: Text("Go Home", style: TextStyle(color: Colors.grey))
             ),
-
-            // Option 2: Daily Exercises (Highlighted)
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Close dialog
-                // Navigate to Exercises Page (Replacement ensures back button works logically)
-                Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => ExercicesPage())
-                );
+                Navigator.of(context).pop();
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ExercicesPage()));
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               child: Text("Daily Exercises", style: TextStyle(color: Colors.white)),
@@ -117,7 +177,8 @@ class _RunningMapPageState extends State<RunningMapPage> with SingleTickerProvid
 
   @override
   void dispose() {
-    _streamSubscription?.cancel();
+    _positionStream?.cancel();
+    _accelStream?.cancel();
     super.dispose();
   }
 
@@ -126,7 +187,7 @@ class _RunningMapPageState extends State<RunningMapPage> with SingleTickerProvid
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text("Virtual Run"),
+        title: Text("Hybrid Run Tracker"),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -141,21 +202,25 @@ class _RunningMapPageState extends State<RunningMapPage> with SingleTickerProvid
             padding: EdgeInsets.all(20),
             color: Colors.grey[100],
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(children: [
+                  Text("DISTANCE", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text("${distanceCovered.toStringAsFixed(1)} m", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                ]),
+                Column(children: [
                   Text("STEPS", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  Text("$stepsTaken / $totalStepsNeeded", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+                  Text("$stepsTaken", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                 ]),
                 Column(children: [
                   Text("SCORE", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  Text("$score", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.orange)),
+                  Text("$score", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.orange)),
                 ]),
               ],
             ),
           ),
 
-          // The Map Visualization
+          // The Map Visualization (Same Visuals)
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -174,28 +239,23 @@ class _RunningMapPageState extends State<RunningMapPage> with SingleTickerProvid
             ),
           ),
 
-          // Instruction / Debug
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Text(
-              isFinished ? "Finished!" : "Run in place (or shake phone) to move!",
-              style: TextStyle(color: Colors.grey),
+          // Simulation Button
+          Container(
+            padding: EdgeInsets.all(10),
+            child: ElevatedButton.icon(
+              icon: Icon(Icons.bug_report),
+              label: Text("Simulate 5m Walk (Testing)"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[800], foregroundColor: Colors.white),
+              onPressed: _simulateMovement,
             ),
           )
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.directions_run),
-        onPressed: () {
-          // Allow manual tapping for testing at desk without shaking
-          _onStepTaken();
-        },
       ),
     );
   }
 }
 
-// This class draws the curved line, the stars, and the player
+// --- VISUALS: Kept exactly the same as before ---
 class RoutePainter extends CustomPainter {
   final double progress;
   final List<double> starLocations;
@@ -217,33 +277,21 @@ class RoutePainter extends CustomPainter {
       ..strokeWidth = 20.0
       ..strokeCap = StrokeCap.round;
 
-    // 1. Define the Path (A winding "S" shape)
     Path path = Path();
-    path.moveTo(size.width * 0.2, size.height * 0.9); // Start bottom left
-    path.quadraticBezierTo(
-        size.width * 0.1, size.height * 0.5, // Control point 1
-        size.width * 0.5, size.height * 0.5  // Mid point
-    );
-    path.quadraticBezierTo(
-        size.width * 0.9, size.height * 0.5, // Control point 2
-        size.width * 0.8, size.height * 0.1  // End top right
-    );
+    path.moveTo(size.width * 0.2, size.height * 0.9);
+    path.quadraticBezierTo(size.width * 0.1, size.height * 0.5, size.width * 0.5, size.height * 0.5);
+    path.quadraticBezierTo(size.width * 0.9, size.height * 0.5, size.width * 0.8, size.height * 0.1);
 
-    // 2. Draw the grey background track
     canvas.drawPath(path, trackPaint);
 
-    // 3. Draw the "Active" track (orange) following player
-    // We use PathMetrics to extract a sub-path based on percentage
     PathMetrics pathMetrics = path.computeMetrics();
     for (PathMetric metric in pathMetrics) {
       Path extracted = metric.extractPath(0.0, metric.length * progress);
       canvas.drawPath(extracted, activePaint);
     }
 
-    // 4. Draw Stars along the path
     for (int i = 0; i < starLocations.length; i++) {
-      if (starCollected[i]) continue; // Don't draw collected stars
-
+      if (starCollected[i]) continue;
       for (PathMetric metric in pathMetrics) {
         Tangent? tangent = metric.getTangentForOffset(metric.length * starLocations[i]);
         if (tangent != null) {
@@ -257,7 +305,6 @@ class RoutePainter extends CustomPainter {
       }
     }
 
-    // 5. Draw Goal Flag at the end
     for (PathMetric metric in pathMetrics) {
       Tangent? endPos = metric.getTangentForOffset(metric.length);
       if (endPos != null) {
@@ -270,8 +317,6 @@ class RoutePainter extends CustomPainter {
       }
     }
 
-    // 6. Draw Player (The Runner)
-    // Find exact X,Y for current progress
     for (PathMetric metric in pathMetrics) {
       Tangent? pos = metric.getTangentForOffset(metric.length * progress);
       if (pos != null) {
