@@ -10,6 +10,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 enum SquatState { 
   standing , goingDown , goingUp , bottom 
 }
+
 enum LungeState { 
   center , goingRight , goingLeft , left , right
 }
